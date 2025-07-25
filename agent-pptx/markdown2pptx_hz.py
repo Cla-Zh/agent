@@ -286,7 +286,7 @@ def create_pptx_from_markdown(markdown_file, output_file):
     print(f"PPT已生成：{output_file}")
 
 
-def main():
+def markdown2pptx():
     """主函数"""
     markdown_file = "sample.md"
     output_file = "output.pptx"
@@ -301,4 +301,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    markdown2pptx()
