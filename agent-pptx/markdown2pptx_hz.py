@@ -86,7 +86,7 @@ def parse_markdown(file_path):
                     description_lines.append(lines[i].strip())
                 i += 1
             
-            current_slide['description'] = ' '.join(description_lines)
+            current_slide['description'] = '\n'.join(description_lines)  # 描述也保持换行
             continue
             
         # 二级标题 - 模块标题
@@ -103,11 +103,13 @@ def parse_markdown(file_path):
                         break
                     if next_line:
                         module_content.append(next_line)
+                    elif lines[i] == '':  # 保留空行
+                        module_content.append('')
                     i += 1
                 
                 current_slide['modules'].append({
                     'title': module_title,
-                    'content': ' '.join(module_content)
+                    'content': '\n'.join(module_content)  # 使用换行符连接，保持结构
                 })
                 continue
         
@@ -158,15 +160,42 @@ def apply_text_formatting(text_frame, text_content):
                     run.text = part
 
 
-def calculate_text_height(text, width_cm, font_size, line_spacing=1.0):
-    """估算文本高度（厘米）"""
-    # 简单估算：假设每行大约能容纳的字符数
-    chars_per_line = int(width_cm * 10 / (font_size * 0.6))  # 粗略估算
-    lines = len(text) // chars_per_line + 1
+def calculate_text_height(text, width_cm, font_size, line_spacing=1.2):
+    """更准确地估算文本高度（厘米）"""
+    if not text.strip():
+        return 0
     
-    # 每行高度约为字号的1.2倍（点数转厘米）
-    line_height_cm = font_size * 0.035 * line_spacing  # 1点 ≈ 0.035厘米
-    return lines * line_height_cm
+    # 每行基础高度（点数转厘米）
+    line_height_cm = font_size * 0.035277778 * line_spacing  # 1点 = 0.035277778厘米
+    
+    # 估算每行能容纳的字符数（考虑中英文差异）
+    # 中文字符宽度约等于字号，英文字符约为字号的0.6倍
+    avg_char_width_pt = font_size * 0.8  # 中英文混合的平均宽度
+    chars_per_line = int((width_cm / 0.035277778) / avg_char_width_pt)
+    
+    # 按换行符分割文本
+    lines = text.split('\n')
+    total_lines = 0
+    
+    for line in lines:
+        line = line.strip()
+        if not line:  # 空行
+            total_lines += 1
+            continue
+            
+        # 计算实际字符数（中文算1个，英文算0.6个）
+        char_count = 0
+        for char in line:
+            if ord(char) > 127:  # 中文或其他宽字符
+                char_count += 1
+            else:  # 英文字符
+                char_count += 0.6
+        
+        # 计算需要的行数
+        line_count = max(1, int(char_count / chars_per_line) + (1 if char_count % chars_per_line else 0))
+        total_lines += line_count
+    
+    return total_lines * line_height_cm
 
 
 def create_pptx_from_markdown(markdown_file, output_file):
@@ -218,7 +247,7 @@ def create_pptx_from_markdown(markdown_file, output_file):
         desc_frame.text = slide_data['description']
         desc_frame.paragraphs[0].alignment = PP_ALIGN.LEFT
         desc_frame.paragraphs[0].font.name = '微软雅黑'
-        desc_frame.paragraphs[0].font.size = Pt(6)
+        desc_frame.paragraphs[0].font.size = Pt(7)
         desc_frame.paragraphs[0].font.color.rgb = RGBColor(255, 255, 255)  # 白色文字
         
         # 3. 底层模块
@@ -250,11 +279,14 @@ def create_pptx_from_markdown(markdown_file, output_file):
             title_frame.paragraphs[0].font.size = Pt(14)
             title_frame.paragraphs[0].font.color.rgb = RGBColor(255, 255, 255)  # 白色文字
             
-            # 内容文本框
+            # 内容文本框 - 动态调整高度
             content_left = Cm(1)
             content_top = Cm(current_y + 0.8)
             content_width = Cm(14.5)
-            content_height = Cm(4)
+            
+            # 根据文本内容计算实际需要的高度
+            estimated_height = calculate_text_height(module['content'], 14.5, 10)
+            content_height = Cm(max(1.0, estimated_height + 0.5))  # 至少1cm，加0.5cm padding
             
             content_shape = slide.shapes.add_textbox(content_left, content_top, content_width, content_height)
             content_shape.shadow.inherit = False  # 无阴影
@@ -269,12 +301,13 @@ def create_pptx_from_markdown(markdown_file, output_file):
                 paragraph.alignment = PP_ALIGN.LEFT
                 for run in paragraph.runs:
                     run.font.name = '微软雅黑'
-                    run.font.size = Pt(10)
+                    run.font.size = Pt(12)
             
             # 计算下一个模块的位置
             text_height = calculate_text_height(module['content'], 14.5, 10)
-            module_total_height = max(4.0, text_height + 0.8)  # 标题高度0.8cm
-            current_y += module_total_height + 0.5  # 模块间距0.5cm
+            # 实际使用的高度：文本高度 + 标题高度(0.8cm) + 一些padding
+            actual_height = text_height + 0.8 + 0.3  # 增加0.3cm的padding
+            current_y += actual_height + 0.3  # 模块间距0.3cm
         
         # 右边模块
         current_y = 3.0  # 重置起始位置
@@ -300,11 +333,14 @@ def create_pptx_from_markdown(markdown_file, output_file):
             title_frame.paragraphs[0].font.size = Pt(14)
             title_frame.paragraphs[0].font.color.rgb = RGBColor(255, 255, 255)  # 白色文字
             
-            # 内容文本框
+            # 内容文本框 - 动态调整高度
             content_left = Cm(16)
             content_top = Cm(current_y + 0.8)
             content_width = Cm(14.5)
-            content_height = Cm(6)
+            
+            # 根据文本内容计算实际需要的高度
+            estimated_height = calculate_text_height(module['content'], 14.5, 10)
+            content_height = Cm(max(1.0, estimated_height + 0.5))  # 至少1cm，加0.5cm padding
             
             content_shape = slide.shapes.add_textbox(content_left, content_top, content_width, content_height)
             content_shape.shadow.inherit = False  # 无阴影
@@ -319,12 +355,13 @@ def create_pptx_from_markdown(markdown_file, output_file):
                 paragraph.alignment = PP_ALIGN.LEFT
                 for run in paragraph.runs:
                     run.font.name = '微软雅黑'
-                    run.font.size = Pt(10)
+                    run.font.size = Pt(12)
             
             # 计算下一个模块的位置
             text_height = calculate_text_height(module['content'], 14.5, 10)
-            module_total_height = max(6.0, text_height + 0.8)  # 标题高度0.8cm
-            current_y += module_total_height + 0.5  # 模块间距0.5cm
+            # 实际使用的高度：文本高度 + 标题高度(0.8cm) + padding
+            actual_height = text_height + 0.8 + 0.3  # 增加0.3cm的padding
+            current_y += actual_height + 0.3  # 模块间距0.3cm
     
     # 保存文件
     prs.save(output_file)
