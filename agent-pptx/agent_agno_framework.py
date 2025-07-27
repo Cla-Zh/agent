@@ -6,6 +6,7 @@ from agno.models.deepseek import DeepSeek
 from agno.tools.reasoning import ReasoningTools
 from agno.tools.file import FileTools
 from markdown2pptx_hz import markdown2pptx
+from agno.tools.duckduckgo import DuckDuckGoTools
 
 import os
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7897'
@@ -28,6 +29,7 @@ reasoning_agent = Agent(
     """),
     tools=[
         ReasoningTools(add_instructions=True),
+        DuckDuckGoTools(),
         FileTools(Path(".")),
     ],
     show_tool_calls=True,
@@ -35,9 +37,17 @@ reasoning_agent = Agent(
     markdown=True,
 )
 
+def get_paper_sum():
 
-reasoning_agent.print_response(
-    "请总结 KVFlow: Efficient Prefix Caching for Accelerating LLM-Based Multi-Agent Workflows 论文，并按照我给你的格式总结，并写入文件", stream=True
-)
+    reasoning_agent.print_response(
+        "请总结 KVFlow: Efficient Prefix Caching for Accelerating LLM-Based Multi-Agent Workflows 论文，并按照我给你的格式总结，并用UTF-8写入文件，文件名称为sample.md。\
+        并且下载两个能说明问题的关键图片。分别命名为1.jpg和2.jpg", stream=True
+    )
 
-markdown2pptx()
+    print("Markdonw 2 pptx")
+    markdown2pptx()
+    print("Markdown 2 pptx end.")
+
+
+if __name__ == "__main__":
+    get_paper_sum()

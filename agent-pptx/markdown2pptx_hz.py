@@ -1,4 +1,5 @@
 import re
+import chardet
 from pptx import Presentation
 from pptx.util import Inches, Pt, Cm
 from pptx.enum.text import PP_ALIGN
@@ -6,10 +7,54 @@ from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 
 
+def safe_read_file(file_path):
+    """安全读取文件，自动检测编码"""
+    try:
+        # 方法1: 使用chardet检测编码
+        with open(file_path, 'rb') as f:
+            raw_data = f.read()
+            result = chardet.detect(raw_data)
+            detected_encoding = result['encoding']
+            confidence = result['confidence']
+            
+        print(f"检测到的编码: {detected_encoding} (置信度: {confidence:.2f})")
+        
+        # 如果置信度较高，使用检测到的编码
+        if confidence > 0.7:
+            with open(file_path, 'r', encoding=detected_encoding) as f:
+                return f.read()
+    except Exception as e:
+        print(f"编码检测失败: {e}")
+    
+    # 方法2: 尝试常见编码
+    encodings = ['utf-8', 'gbk', 'gb2312', 'cp936', 'latin-1', 'cp1252']
+    
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as f:
+                content = f.read()
+                print(f"成功使用编码: {encoding}")
+                return content
+        except UnicodeDecodeError:
+            continue
+        except Exception as e:
+            print(f"使用编码 {encoding} 时出错: {e}")
+            continue
+    
+    # 方法3: 最后的fallback - 使用utf-8并忽略错误
+    try:
+        print("使用UTF-8编码并忽略错误字符")
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            return f.read()
+    except Exception as e:
+        print(f"最终读取失败: {e}")
+        raise ValueError(f"无法读取文件 {file_path}，请检查文件是否存在或已损坏")
+
+
 def parse_markdown(file_path):
     """解析Markdown文件"""
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
+    # 使用安全读取方法
+    content = safe_read_file(file_path)
     
     slides_data = []
     current_slide = None
@@ -293,6 +338,7 @@ def markdown2pptx():
     
     try:
         create_pptx_from_markdown(markdown_file, output_file)
+        print(f"已生成 {output_file}")
     except FileNotFoundError:
         print(f"错误：找不到文件 {markdown_file}")
         print("请确保在当前目录下存在 sample.md 文件")
