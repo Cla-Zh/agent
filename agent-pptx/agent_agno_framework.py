@@ -9,6 +9,7 @@ from agno.models.deepseek import DeepSeek
 from agno.tools.reasoning import ReasoningTools
 from agno.tools.file import FileTools
 from agno.tools.duckduckgo import DuckDuckGoTools
+from agno.tools.googlesearch import GoogleSearchTools
 
 import os
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7897'
@@ -98,7 +99,7 @@ class PaperSummarizer:
                 instructions=dedent(instructions),
                 tools=[
                     ReasoningTools(add_instructions=True),
-                    DuckDuckGoTools(),
+                    GoogleSearchTools(),
                     FileTools(self.output_dir),
                 ],
                 show_tool_calls=True,
@@ -226,7 +227,7 @@ def main():
     # 方式1: 基本使用
     summarizer = PaperSummarizer()
     summarizer.full_workflow(
-        "KVFlow: Efficient Prefix Caching for Accelerating LLM-Based Multi-Agent Workflows",
+        "KVFlow: Efficient Prefix Caching for Accelerating LLM-Based Multi-Agent Workflows,https://arxiv.org/html/2507.07400v1",
         "sample.md"
     )
     
