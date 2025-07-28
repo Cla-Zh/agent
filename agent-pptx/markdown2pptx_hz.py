@@ -160,44 +160,6 @@ def apply_text_formatting(text_frame, text_content):
                     run.text = part
 
 
-def calculate_text_height(text, width_cm, font_size, line_spacing=1.2):
-    """更准确地估算文本高度（厘米）"""
-    if not text.strip():
-        return 0
-    
-    # 每行基础高度（点数转厘米）
-    line_height_cm = font_size * 0.035277778 * line_spacing  # 1点 = 0.035277778厘米
-    
-    # 估算每行能容纳的字符数（考虑中英文差异）
-    # 中文字符宽度约等于字号，英文字符约为字号的0.6倍
-    avg_char_width_pt = font_size * 0.8  # 中英文混合的平均宽度
-    chars_per_line = int((width_cm / 0.035277778) / avg_char_width_pt)
-    
-    # 按换行符分割文本
-    lines = text.split('\n')
-    total_lines = 0
-    
-    for line in lines:
-        line = line.strip()
-        if not line:  # 空行
-            total_lines += 1
-            continue
-            
-        # 计算实际字符数（中文算1个，英文算0.6个）
-        char_count = 0
-        for char in line:
-            if ord(char) > 127:  # 中文或其他宽字符
-                char_count += 1
-            else:  # 英文字符
-                char_count += 0.6
-        
-        # 计算需要的行数
-        line_count = max(1, int(char_count / chars_per_line) + (1 if char_count % chars_per_line else 0))
-        total_lines += line_count
-    
-    return total_lines * line_height_cm
-
-
 def create_pptx_from_markdown(markdown_file, output_file):
     """从Markdown创建PPTX"""
     # 解析Markdown
@@ -255,8 +217,10 @@ def create_pptx_from_markdown(markdown_file, output_file):
         left_modules = modules[:3]  # 左边3个
         right_modules = modules[3:5]  # 右边2个
         
-        # 左边模块
+        # 左边模块 - 固定高度4厘米
+        left_module_height = Cm(4.2)  # 固定高度4厘米
         current_y = 3.0  # 起始垂直位置（厘米）
+        
         for i, module in enumerate(left_modules):
             # 标题矩形
             title_left = Cm(1)
@@ -279,14 +243,11 @@ def create_pptx_from_markdown(markdown_file, output_file):
             title_frame.paragraphs[0].font.size = Pt(14)
             title_frame.paragraphs[0].font.color.rgb = RGBColor(255, 255, 255)  # 白色文字
             
-            # 内容文本框 - 动态调整高度
+            # 内容文本框 - 固定高度4厘米
             content_left = Cm(1)
             content_top = Cm(current_y + 0.8)
             content_width = Cm(14.5)
-            
-            # 根据文本内容计算实际需要的高度
-            estimated_height = calculate_text_height(module['content'], 14.5, 10)
-            content_height = Cm(max(1.0, estimated_height + 0.5))  # 至少1cm，加0.5cm padding
+            content_height = left_module_height  # 固定高度4厘米
             
             content_shape = slide.shapes.add_textbox(content_left, content_top, content_width, content_height)
             content_shape.shadow.inherit = False  # 无阴影
@@ -303,14 +264,13 @@ def create_pptx_from_markdown(markdown_file, output_file):
                     run.font.name = '微软雅黑'
                     run.font.size = Pt(12)
             
-            # 计算下一个模块的位置
-            text_height = calculate_text_height(module['content'], 14.5, 10)
-            # 实际使用的高度：文本高度 + 标题高度(0.8cm) + 一些padding
-            actual_height = text_height + 0.8 + 0.3  # 增加0.3cm的padding
-            current_y += actual_height + 0.3  # 模块间距0.3cm
+            # 计算下一个模块的位置 - 使用固定间距
+            current_y += 4.8 + 0.3  # 标题高度(0.8cm) + 内容高度(4cm) + 模块间距(0.3cm)
         
-        # 右边模块
+        # 右边模块 - 固定高度6厘米
+        right_module_height = Cm(6.0)  # 固定高度6厘米
         current_y = 3.0  # 重置起始位置
+        
         for i, module in enumerate(right_modules):
             # 标题矩形
             title_left = Cm(16)
@@ -333,14 +293,11 @@ def create_pptx_from_markdown(markdown_file, output_file):
             title_frame.paragraphs[0].font.size = Pt(14)
             title_frame.paragraphs[0].font.color.rgb = RGBColor(255, 255, 255)  # 白色文字
             
-            # 内容文本框 - 动态调整高度
+            # 内容文本框 - 固定高度6厘米
             content_left = Cm(16)
             content_top = Cm(current_y + 0.8)
             content_width = Cm(14.5)
-            
-            # 根据文本内容计算实际需要的高度
-            estimated_height = calculate_text_height(module['content'], 14.5, 10)
-            content_height = Cm(max(1.0, estimated_height + 0.5))  # 至少1cm，加0.5cm padding
+            content_height = right_module_height  # 固定高度6厘米
             
             content_shape = slide.shapes.add_textbox(content_left, content_top, content_width, content_height)
             content_shape.shadow.inherit = False  # 无阴影
@@ -357,20 +314,16 @@ def create_pptx_from_markdown(markdown_file, output_file):
                     run.font.name = '微软雅黑'
                     run.font.size = Pt(12)
             
-            # 计算下一个模块的位置
-            text_height = calculate_text_height(module['content'], 14.5, 10)
-            # 实际使用的高度：文本高度 + 标题高度(0.8cm) + padding
-            actual_height = text_height + 0.8 + 0.3  # 增加0.3cm的padding
-            current_y += actual_height + 0.3  # 模块间距0.3cm
+            # 计算下一个模块的位置 - 使用固定间距
+            current_y += 6.8 + 0.3  # 标题高度(0.8cm) + 内容高度(6cm) + 模块间距(0.3cm)
     
     # 保存文件
     prs.save(output_file)
     print(f"PPT已生成：{output_file}")
 
 
-def markdown2pptx():
+def markdown2pptx(markdown_file: str = "sample.md"):
     """主函数"""
-    markdown_file = "sample.md"
     output_file = "output.pptx"
     
     try:
