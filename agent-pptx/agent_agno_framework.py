@@ -14,9 +14,9 @@ from agno.tools.googlesearch import GoogleSearchTools
 import os
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7897'
 os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7897'
-os.environ["DEEPSEEK_API_KEY"] = "sk-c3dea683f5314d0ea85e5f18a23bxxxx"
+os.environ["DEEPSEEK_API_KEY"] = "sk-f25b9b7c1f854a1898098ed0f6126471"
 
-'''deepseek: sk-c3dea683f5314d0ea85e5f18a23bxxxx'''
+'''deepseek: sk-f25b9b7c1f854a1898098ed0f6126471'''
 
 class PaperSummarizer:
     """论文总结器 - 用于加载模板、初始化Agent并生成论文总结"""
@@ -175,6 +175,7 @@ class PaperSummarizer:
         Returns:
             工作流是否成功完成
         """
+        print("----------------------------------------full_workflow---------------------------------")
         # 初始化Agent
         if not self.init_agent():
             return False
