@@ -365,6 +365,9 @@
                 this.initElements();
                 this.bindEvents();
                 this.logCount = 0;
+                this.isGenerating = false;
+                this.requestInProgress = false;
+                console.log('PaperSummarizerUI 初始化完成');
             }
 
             initElements() {
@@ -378,17 +381,31 @@
                 this.progressBar = document.getElementById('progressBar');
                 this.progressFill = document.getElementById('progressFill');
                 this.statusMessage = document.getElementById('statusMessage');
+                
+                console.log('DOM 元素初始化完成');
             }
 
             bindEvents() {
-                this.generateBtn.addEventListener('click', () => this.handleGenerate());
-                this.downloadBtn.addEventListener('click', () => this.handleDownload());
+                this.generateBtn.addEventListener('click', (e) => {
+                    console.log('生成按钮被点击');
+                    e.preventDefault();
+                    this.handleGenerate();
+                });
+                
+                this.downloadBtn.addEventListener('click', (e) => {
+                    console.log('下载按钮被点击');
+                    e.preventDefault();
+                    this.handleDownload();
+                });
                 
                 this.paperInput.addEventListener('keydown', (e) => {
                     if (e.ctrlKey && e.key === 'Enter') {
+                        console.log('键盘快捷键触发生成');
                         this.handleGenerate();
                     }
                 });
+                
+                console.log('事件绑定完成');
             }
 
             addLog(message, type = 'info') {
@@ -402,14 +419,17 @@
                 this.logContainer.scrollTop = this.logContainer.scrollHeight;
                 
                 this.logCount++;
+                console.log(`添加日志: ${message}`);
             }
 
             clearLogs() {
                 this.logContainer.innerHTML = '';
                 this.logCount = 0;
+                console.log('日志已清空');
             }
 
             setLoading(isLoading) {
+                this.isGenerating = isLoading;
                 this.generateBtn.disabled = isLoading;
                 this.spinner.style.display = isLoading ? 'inline-block' : 'none';
                 this.btnText.textContent = isLoading ? '正在生成中...' : '🚀 开始生成';
@@ -421,6 +441,8 @@
                     this.progressBar.classList.remove('show');
                     this.statusMessage.classList.remove('show');
                 }
+                
+                console.log(`设置加载状态: ${isLoading}`);
             }
 
             updateProgress(percent, message = '') {
@@ -428,17 +450,27 @@
                 if (message) {
                     this.statusMessage.textContent = message;
                 }
+                console.log(`进度更新: ${percent}% - ${message}`);
             }
 
             showDownloadButton() {
                 this.downloadSection.classList.add('show');
+                console.log('显示下载按钮');
             }
 
             hideDownloadButton() {
                 this.downloadSection.classList.remove('show');
+                console.log('隐藏下载按钮');
             }
 
             async callBackendAPI(paperTitle) {
+                if (this.requestInProgress) {
+                    throw new Error('请求正在处理中，请勿重复提交');
+                }
+
+                this.requestInProgress = true;
+                console.log('开始调用后端API');
+                
                 try {
                     const response = await fetch('/api/summarize', {
                         method: 'POST',
@@ -451,12 +483,15 @@
                         })
                     });
 
+                    console.log('API响应状态:', response.status);
+
                     if (!response.ok) {
                         const errorData = await response.json();
                         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
                     }
 
                     const result = await response.json();
+                    console.log('API响应结果:', result);
                     
                     if (!result.success) {
                         throw new Error(result.error || '任务启动失败');
@@ -465,8 +500,11 @@
                     return await this.pollTaskStatus();
 
                 } catch (error) {
+                    console.error('API调用错误:', error);
                     this.addLog(`❌ API调用失败: ${error.message}`, 'error');
                     throw error;
+                } finally {
+                    this.requestInProgress = false;
                 }
             }
 
@@ -474,6 +512,8 @@
                 const pollInterval = 1000;
                 let attempts = 0;
                 const maxAttempts = 300;
+
+                console.log('开始轮询任务状态');
 
                 return new Promise((resolve, reject) => {
                     const poll = async () => {
@@ -492,6 +532,7 @@
                             }
 
                             const status = await response.json();
+                            console.log('状态轮询结果:', status);
                             
                             if (status.progress !== undefined) {
                                 this.updateProgress(status.progress, status.message || '');
@@ -515,6 +556,7 @@
                             setTimeout(poll, pollInterval);
 
                         } catch (error) {
+                            console.error('状态轮询错误:', error);
                             reject(error);
                         }
                     };
@@ -524,10 +566,18 @@
             }
 
             async handleGenerate() {
+                console.log('handleGenerate 方法被调用');
+                
                 const paperTitle = this.paperInput.value.trim();
+                console.log('输入的论文标题:', paperTitle);
                 
                 if (!paperTitle) {
                     this.addLog('请输入论文标题或链接', 'error');
+                    return;
+                }
+
+                if (this.isGenerating) {
+                    this.addLog('任务正在执行中，请等待完成', 'warning');
                     return;
                 }
 
@@ -540,7 +590,31 @@
                     
                     if (success) {
                         this.addLog('🎉 论文总结生成成功！', 'info');
-                        this.showDownloadButton();
+                        
+                        // 验证文件是否生成
+                        setTimeout(async () => {
+                            try {
+                                const filesResponse = await fetch('/api/debug/files');
+                                const filesData = await filesResponse.json();
+                                
+                                if (filesData.all_files && filesData.all_files.length > 0) {
+                                    const pptxFiles = filesData.all_files.filter(file => file.name.endsWith('.pptx'));
+                                    if (pptxFiles.length > 0) {
+                                        this.addLog(`✅ 发现生成的PPT文件: ${pptxFiles[0].name}`, 'info');
+                                        this.showDownloadButton();
+                                    } else {
+                                        this.addLog('⚠️ 未找到PPT文件，可能生成失败', 'warning');
+                                        this.showDownloadButton(); // 仍然显示按钮让用户尝试
+                                    }
+                                } else {
+                                    this.showDownloadButton(); // 显示按钮让用户尝试
+                                }
+                            } catch (error) {
+                                console.error('验证文件失败:', error);
+                                this.showDownloadButton();
+                            }
+                        }, 1000);
+                        
                     } else {
                         this.addLog('❌ 生成失败，请重试', 'error');
                     }
@@ -551,22 +625,87 @@
                 }
             }
 
-            handleDownload() {
+            async handleDownload() {
+                console.log('handleDownload 方法被调用');
                 this.addLog('开始下载PPT文件...', 'info');
                 
-                const link = document.createElement('a');
-                link.href = '/api/download/paper_summary.pptx';
-                link.download = 'paper_summary.pptx';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                this.addLog('PPT文件下载完成！', 'info');
+                try {
+                    const filesResponse = await fetch('/api/debug/files');
+                    const filesData = await filesResponse.json();
+                    
+                    if (filesData.error) {
+                        this.addLog(`❌ 获取文件信息失败: ${filesData.error}`, 'error');
+                        return;
+                    }
+                    
+                    console.log('调试信息:', filesData);
+                    
+                    const pptxFiles = filesData.all_files.filter(file => file.name.endsWith('.pptx'));
+                    
+                    if (pptxFiles.length === 0) {
+                        this.addLog('❌ 未找到PPT文件，请先生成论文总结', 'error');
+                        return;
+                    }
+                    
+                    const pptxFile = pptxFiles[0];
+                    this.addLog(`找到PPT文件: ${pptxFile.name} (${pptxFile.size} bytes)`, 'info');
+                    
+                    const downloadUrl = `/api/download/${encodeURIComponent(pptxFile.name)}`;
+                    
+                    // 检查文件是否可下载
+                    const checkResponse = await fetch(downloadUrl, { method: 'HEAD' });
+                    
+                    if (!checkResponse.ok) {
+                        const errorResponse = await fetch(downloadUrl);
+                        const errorData = await errorResponse.json();
+                        this.addLog(`❌ 文件下载检查失败: ${errorData.error || checkResponse.statusText}`, 'error');
+                        return;
+                    }
+                    
+                    // 使用多种方式尝试下载
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = pptxFile.name;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    this.addLog('✅ PPT文件下载已启动！', 'info');
+                    
+                    setTimeout(() => {
+                        this.addLog('如果下载没有开始，请检查浏览器的下载设置', 'warning');
+                    }, 3000);
+                    
+                } catch (error) {
+                    this.addLog(`❌ 下载过程中出错: ${error.message}`, 'error');
+                    console.error('下载错误详情:', error);
+                }
+            }
+
+            // 调试方法
+            debugFiles() {
+                fetch('/api/debug/files')
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('文件调试信息:', data);
+                        this.addLog(`调试信息已输出到控制台`, 'info');
+                    })
+                    .catch(error => {
+                        console.error('获取调试信息失败:', error);
+                    });
             }
         }
 
+        // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', () => {
-            new PaperSummarizerUI();
+            console.log('DOM加载完成，开始初始化应用');
+            const app = new PaperSummarizerUI();
+            
+            // 将实例挂载到window对象上以便调试
+            window.paperApp = app;
+            
+            console.log('应用初始化完成');
         });
     </script>
 </body>
