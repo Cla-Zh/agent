@@ -8,15 +8,12 @@ from agno.agent import Agent
 from agno.models.deepseek import DeepSeek
 from agno.tools.reasoning import ReasoningTools
 from agno.tools.file import FileTools
-from agno.tools.duckduckgo import DuckDuckGoTools
 from agno.tools.googlesearch import GoogleSearchTools
+from agno.tools.arxiv import ArxivTools
 
 import os
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7897'
 os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7897'
-os.environ["DEEPSEEK_API_KEY"] = "sk-f25b9b7c1f854a1898098ed0f6126471"
-
-'''deepseek: sk-f25b9b7c1f854a1898098ed0f6126471'''
 
 class PaperSummarizer:
     """论文总结器 - 用于加载模板、初始化Agent并生成论文总结"""
@@ -95,12 +92,13 @@ class PaperSummarizer:
             
             # 初始化Agent
             self.agent = Agent(
-                model=DeepSeek(id=self.model_id),
+                model=DeepSeek(id=self.model_id, api_key = "sk-f25b9b7c1f854a1898098ed0f6126471"),
                 instructions=dedent(instructions),
                 tools=[
                     ReasoningTools(add_instructions=True),
                     GoogleSearchTools(),
                     FileTools(self.output_dir),
+                    ArxivTools(read_arxiv_papers=True,download_dir=self.output_dir),
                 ],
                 show_tool_calls=True,
                 add_references=True,
@@ -134,7 +132,7 @@ class PaperSummarizer:
             return False
         
         try:
-            prompt = f"请总结 {paper_title} 论文，并按照我给你的格式总结，并用UTF-8写入文件，文件名称为{output_file}。"
+            prompt = f"请总结 {paper_title} 论文，并按照我给你的格式总结，并用UTF-8写入文件，文件名称为{output_file}。并且下载相关图片。"
             
             self.logger.info(f"开始总结论文: {paper_title}")
             self.agent.print_response(prompt, stream=stream)
