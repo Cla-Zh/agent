@@ -3,38 +3,57 @@
 基于Agno框架的Agent基类和多态实现
 支持不同的prompt、工具和行为模式
 """
-
+from agno import Agent, Memory, Tool, PromptTemplate
+from agno.tools import WebSearchTool, CodeExecutorTool, FileManagerTool
+from agno.memory import ConversationMemory, VectorMemory
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional, Union
 import asyncio
 import logging
+import random
 from dataclasses import dataclass
 from enum import Enum
 
+from round_table_agent.agent_factory import AgentFactory
+
+
+class AgentType(Enum):
+    """Agent类型枚举"""
+    RESEARCHER = "researcher"
+    CODER = "coder"
+    ASSISTANT = "assistant"
+    ANALYST = "analyst"
+    SCIENTIST = "scientist"
+    FINANCIER = "financier"
+    ENGINEER = "engineer"
+    LEADER = "leader"
+    ENTREPRENEUR = "entrepreneur"
+    ARTIST = "artist"
+
 # 假设这些是Agno框架的核心组件
 # 实际使用时需要根据Agno框架的真实API调整
-try:
-    from agno import Agent, Memory, Tool, PromptTemplate
-    from agno.tools import WebSearchTool, CodeExecutorTool, FileManagerTool
-    from agno.memory import ConversationMemory, VectorMemory
-except ImportError:
-    print("警告: Agno框架未安装，使用模拟实现")
-    # 模拟Agno框架的基础组件
-    class Agent:
-        def __init__(self, *args, **kwargs):
-            pass
+# try:
+#     from agno import Agent, Memory, Tool, PromptTemplate
+#     from agno.tools import WebSearchTool, CodeExecutorTool, FileManagerTool
+#     from agno.memory import ConversationMemory, VectorMemory
+# except ImportError:
+#     print("警告: Agno框架未安装，使用模拟实现")
+#     # 模拟Agno框架的基础组件
+#     class Agent:
+#         def __init__(self, *args, **kwargs):
+#             pass
     
-    class Memory:
-        def __init__(self, *args, **kwargs):
-            pass
+#     class Memory:
+#         def __init__(self, *args, **kwargs):
+#             pass
     
-    class Tool:
-        def __init__(self, *args, **kwargs):
-            pass
+#     class Tool:
+#         def __init__(self, *args, **kwargs):
+#             pass
     
-    class PromptTemplate:
-        def __init__(self, template: str):
-            self.template = template
+#     class PromptTemplate:
+#         def __init__(self, template: str):
+#             self.template = template
  
 
 
@@ -53,7 +72,7 @@ class AgentConfig:
 class AgentBase(ABC):
     """Agent基类，定义Agent的基本框架"""
     
-    def __init__(self, config: AgentConfig):
+    def __init__(self, config: AgentConfig, name: str, role: str):
         self.config = config
         self.name = config.name
         self.agent_type = config.agent_type
@@ -64,6 +83,8 @@ class AgentBase(ABC):
         self.tools = self._setup_tools()
         self.prompt_template = self._setup_prompt()
         self.agent = self._setup_agent()
+        self.name = name
+        self.role = role
     
     def _setup_logger(self) -> logging.Logger:
         """设置日志"""
@@ -172,7 +193,21 @@ class AgentBase(ABC):
             "memory_size": self.config.memory_size,
             "model": self.config.model
         }
-
+        
+    @abstractmethod
+    async def think(self, topic: str) -> str:
+        """
+        Agent思考方法 - 子类必须实现
+        返回markdown格式的思考结果
+        """
+        pass
+    
+    async def _simulate_thinking_time(self):
+        """模拟思考时间"""
+        # 随机2-8秒的思考时间，模拟真实的AI处理时间
+        thinking_time = random.uniform(2, 8)
+        await asyncio.sleep(thinking_time)
+    
 
 # 使用示例
 async def main():
