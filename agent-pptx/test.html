@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent圆桌讨论</title>
+    <!-- 引入markdown解析库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/5.1.1/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', 'Microsoft YaHei', sans-serif;
+            background: #000000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow-x: auto;
+            padding: 40px 20px;
+            position: relative;
+        }
+
+        /* 高级背景线条效果 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                linear-gradient(90deg, transparent 98%, rgba(255,255,255,0.03) 100%),
+                linear-gradient(0deg, transparent 98%, rgba(255,255,255,0.03) 100%);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            min-width: 320px;
+            position: relative;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 
+                0 0 50px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: -1px;
+            right: -1px;
+            bottom: -1px;
+            background: linear-gradient(45deg, 
+                rgba(255, 255, 255, 0.1), 
+                rgba(255, 255, 255, 0.05), 
+                rgba(255, 255, 255, 0.1));
+            border-radius: 20px;
+            z-index: -1;
+            animation: borderGlow 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes borderGlow {
+            0% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .title {
+            text-align: center;
+            color: white;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-weight: 300;
+        }
+
+        .discussion-area {
+            position: relative;
+            width: 100%;
+            height: 450px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            margin-top: 1rem;
+        }
+
+        .discussion-area::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            z-index: -1;
+        }
+
+        .discussion-area::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 400px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 50%;
+            z-index: -1;
+        }
+
+        /* 桌子样式 */
+        .table {
+            width: 200px;
+            height: 120px;
+            background: linear-gradient(145deg, #ffffff, #e6e6e6);
+            border-radius: 30px;
+            box-shadow: 
+                20px 20px 40px rgba(0,0,0,0.1),
+                -20px -20px 40px rgba(255,255,255,0.1);
+            position: relative;
+            border: 3px solid #fff;
+            margin-bottom: 40px;
+        }
+
+        /* Agent位置布局 */
+        .agent {
+            position: static;
+            width: 120px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0 10px;
+        }
+
+        .agent:hover {
+            transform: scale(1.05);
+        }
+
+        .agent.disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        /* 六个位置的具体定位 - 两排布局 */
+        .agents-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 50px;
+            max-width: 70%;
+            margin: 20px auto;
+        }
+
+        .agent-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+        }
+
+        /* 状态框 */
+        .status-box {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            padding: 8px 16px;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            color: white;
+            font-weight: bold;
+            box-shadow: 
+                0 4px 8px rgba(0,0,0,0.2),
+                inset 0 1px 0 rgba(255,255,255,0.2),
+                0 0 0 1px rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+            position: relative;
+        }
+
+        .status-box::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: -1px;
+            right: -1px;
+            bottom: -1px;
+            background: linear-gradient(45deg, 
+                rgba(255,255,255,0.2), 
+                rgba(255,255,255,0.1), 
+                rgba(255,255,255,0.2));
+            border-radius: 20px;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .status-box:hover::before {
+            opacity: 1;
+        }
+
+        .status-box.thinking {
+            background: rgba(255, 193, 7, 0.2);
+            border-color: rgba(255, 193, 7, 0.4);
+            color: #ffc107;
+            animation: pulse 2s infinite;
+        }
+
+        .status-box.completed {
+            background: rgba(40, 167, 69, 0.2);
+            border-color: rgba(40, 167, 69, 0.4);
+            color: #28a745;
+        }
+
+        .status-box.error {
+            background: rgba(220, 53, 69, 0.2);
+            border-color: rgba(220, 53, 69, 0.4);
+            color: #dc3545;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        /* 头像样式 */
+        .avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #f0f0f0, #cacaca);
+            border: 4px solid #fff;
+            box-shadow: 
+                0 8px 16px rgba(0,0,0,0.1),
+                0 0 0 1px rgba(255,255,255,0.2),
+                inset 0 1px 0 rgba(255,255,255,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: #333;
+            margin: 0 auto;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .avatar::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, 
+                rgba(255,255,255,0.3), 
+                rgba(255,255,255,0.1), 
+                rgba(255,255,255,0.3));
+            border-radius: 50%;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .agent:hover .avatar {
+            box-shadow: 
+                0 12px 24px rgba(0,0,0,0.3),
+                0 0 0 2px rgba(255,255,255,0.3),
+                inset 0 1px 0 rgba(255,255,255,0.4);
+            transform: scale(1.05);
+        }
+
+        .agent:hover .avatar::before {
+            opacity: 1;
+        }
+
+        /* 角色标签 */
+        .role-label {
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-top: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        /* 输入区域 */
+        .input-section {
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            margin: 40px auto 0;
+        }
+
+        .topic-input {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 25px;
+            font-size: 1rem;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            box-shadow: 
+                0 8px 16px rgba(0,0,0,0.2),
+                inset 0 1px 0 rgba(255,255,255,0.2),
+                0 0 0 1px rgba(255,255,255,0.1);
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            color: white;
+            position: relative;
+        }
+
+        .topic-input::placeholder {
+            color: rgba(255,255,255,0.6);
+        }
+
+        .topic-input:focus {
+            outline: none;
+            border-color: rgba(255,255,255,0.6);
+            box-shadow: 
+                0 0 30px rgba(255,255,255,0.2),
+                inset 0 1px 0 rgba(255,255,255,0.3),
+                0 0 0 2px rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.15);
+        }
+
+        .topic-input::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: -1px;
+            right: -1px;
+            bottom: -1px;
+            background: linear-gradient(45deg, 
+                rgba(255,255,255,0.2), 
+                rgba(255,255,255,0.1), 
+                rgba(255,255,255,0.2));
+            border-radius: 25px;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .topic-input:focus::before {
+            opacity: 1;
+        }
+
+        .topic-input::placeholder {
+            color: #999;
+        }
+
+        .char-count {
+            color: white;
+            font-size: 0.8rem;
+            margin-bottom: 10px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        .start-btn {
+            background: linear-gradient(145deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 
+                0 8px 16px rgba(0,0,0,0.3),
+                0 0 0 1px rgba(255,255,255,0.2),
+                inset 0 1px 0 rgba(255,255,255,0.3);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .start-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, 
+                transparent, 
+                rgba(255,255,255,0.2), 
+                transparent);
+            transition: left 0.5s ease;
+        }
+
+        .start-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 12px 24px rgba(0,0,0,0.4),
+                0 0 0 2px rgba(255,255,255,0.3),
+                inset 0 1px 0 rgba(255,255,255,0.4);
+        }
+
+        .start-btn:hover:not(:disabled)::before {
+            left: 100%;
+        }
+
+        .start-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 进度条 */
+        .progress-container {
+            width: 100%;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            margin: 20px 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .progress-text {
+            color: white;
+            font-size: 0.9rem;
+            text-align: center;
+            margin-top: 10px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        /* 模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal.show {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: white;
+            padding: 0;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 30px;
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .close-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.1);
+        }
+
+        .modal-body {
+            padding: 30px;
+            max-height: 70vh;
+            overflow-y: auto;
+            line-height: 1.6;
+            color: #333;
+            font-size: 1rem;
+        }
+
+        /* Markdown样式 */
+        .markdown-content h1 {
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .markdown-content h2 {
+            color: #764ba2;
+            margin: 25px 0 15px;
+            font-size: 1.3rem;
+        }
+
+        .markdown-content h3 {
+            color: #555;
+            margin: 20px 0 10px;
+            font-size: 1.1rem;
+        }
+
+        .markdown-content p {
+            margin-bottom: 15px;
+        }
+
+        .markdown-content ul, .markdown-content ol {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+
+        .markdown-content li {
+            margin-bottom: 8px;
+        }
+
+        .markdown-content blockquote {
+            border-left: 4px solid #667eea;
+            margin: 20px 0;
+            padding: 15px 20px;
+            background: #f8f9ff;
+            font-style: italic;
+        }
+
+        .markdown-content code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #d63384;
+        }
+
+        .markdown-content pre {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            border: 1px solid #e9ecef;
+        }
+
+        .markdown-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .markdown-content th, .markdown-content td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .markdown-content th {
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+
+        .loading {
+            text-align: center;
+            color: #667eea;
+            font-style: italic;
+            padding: 40px;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-left: 10px;
+            border: 2px solid #667eea;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1024px) {
+            .agents-container {
+                max-width: 80%;
+            }
+
+            .agent-row {
+                gap: 25px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                width: 98%;
+                padding: 0 10px;
+            }
+
+            .title {
+                font-size: 1.8rem;
+                margin-bottom: 2rem;
+            }
+
+            .agents-container {
+                max-width: 90%;
+                gap: 30px;
+            }
+
+            .agent-row {
+                gap: 20px;
+            }
+
+            .agent {
+                width: 100px;
+            }
+
+            .modal-content {
+                width: 95%;
+            }
+
+            .modal-body {
+                padding: 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .title {
+                font-size: 1.5rem;
+                margin-bottom: 1.5rem;
+            }
+
+            .agents-container {
+                max-width: 95%;
+                gap: 25px;
+            }
+
+            .agent-row {
+                gap: 15px;
+            }
+
+            .agent {
+                width: 90px;
+            }
+
+            .avatar {
+                width: 60px;
+                height: 60px;
+                font-size: 1.5rem;
+            }
+
+            .role-label {
+                font-size: 0.7rem;
+                padding: 4px 8px;
+            }
+
+            .status-box {
+                font-size: 0.8rem;
+                padding: 6px 12px;
+            }
+
+            .modal-header {
+                padding: 15px 20px;
+            }
+
+            .modal-title {
+                font-size: 1.2rem;
+            }
+
+            .modal-body {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">AI Agent 圆桌讨论</h1>
+
+        <div class="discussion-area">
+            <div class="table"></div>
+
+            <!-- 六个Agent分两排排列 -->
+            <div class="agents-container">
+                <!-- 上排：科学家、金融家、工程师 -->
+                <div class="agent-row">
+                    <div class="agent" data-role="科学家" data-key="scientist">
+                        <div class="status-box">等待开始</div>
+                        <div class="avatar">🧬</div>
+                        <div class="role-label">科学家</div>
+                    </div>
+                    
+                    <div class="agent" data-role="金融家" data-key="financier">
+                        <div class="status-box">等待开始</div>
+                        <div class="avatar">💰</div>
+                        <div class="role-label">金融家</div>
+                    </div>
+                    
+                    <div class="agent" data-role="工程师" data-key="engineer">
+                        <div class="status-box">等待开始</div>
+                        <div class="avatar">⚙️</div>
+                        <div class="role-label">工程师</div>
+                    </div>
+                </div>
+
+                <!-- 下排：企业家、艺术家、领导 -->
+                <div class="agent-row">
+                    <div class="agent" data-role="企业家" data-key="entrepreneur">
+                        <div class="status-box">等待开始</div>
+                        <div class="avatar">🚀</div>
+                        <div class="role-label">企业家</div>
+                    </div>
+                    
+                    <div class="agent" data-role="艺术家" data-key="artist">
+                        <div class="status-box">等待开始</div>
+                        <div class="avatar">🎨</div>
+                        <div class="role-label">艺术家</div>
+                    </div>
+                    
+                    <div class="agent" data-role="领导" data-key="leader">
+                        <div class="status-box">等待开始</div>
+                        <div class="avatar">👑</div>
+                        <div class="role-label">领导</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 进度条 -->
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar" id="progressBar"></div>
+                <div class="progress-text" id="progressText">讨论进度：0/6</div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="input-section">
+                <div class="char-count">还可输入 <span id="charCount">60</span> 个字</div>
+                <input type="text" class="topic-input" id="topicInput" placeholder="请输入讨论话题，例如：人工智能对未来教育的影响" maxlength="60">
+                <button class="start-btn" id="startBtn">发起讨论</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模态框 -->
+    <div class="modal" id="resultModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">
+                    <span id="agentEmoji">🤖</span>
+                    <span id="agentName">Agent思考结果</span>
+                </div>
+                <button class="close-btn" id="closeBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <div class="loading">正在加载思考结果...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class DiscussionSystem {
+            constructor() {
+                this.agents = new Map();
+                this.currentTopic = '';
+                this.discussionActive = false;
+                this.results = new Map();
+                this.sessionId = null;
+                this.pollInterval = null;
+                
+                this.init();
+            }
+
+            init() {
+                this.bindEvents();
+                this.initAgents();
+                this.setupCharCounter();
+                console.log('AI Agent讨论系统初始化完成');
+            }
+
+            bindEvents() {
+                // 开始讨论按钮
+                document.getElementById('startBtn').addEventListener('click', () => {
+                    this.startDiscussion();
+                });
+
+                // 模态框关闭
+                document.getElementById('closeBtn').addEventListener('click', () => {
+                    this.closeModal();
+                });
+
+                document.getElementById('resultModal').addEventListener('click', (e) => {
+                    if (e.target.id === 'resultModal') {
+                        this.closeModal();
+                    }
+                });
+
+                // ESC键关闭模态框
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        this.closeModal();
+                    }
+                });
+
+                // Enter键发起讨论
+                document.getElementById('topicInput').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.startDiscussion();
+                    }
+                });
+            }
+
+            initAgents() {
+                const agentElements = document.querySelectorAll('.agent');
+                agentElements.forEach(agent => {
+                    const key = agent.getAttribute('data-key');
+                    const role = agent.getAttribute('data-role');
+                    const emoji = agent.querySelector('.avatar').textContent;
+                    
+                    this.agents.set(key, {
+                        element: agent,
+                        role: role,
+                        emoji: emoji,
+                        status: 'waiting'
+                    });
+
+                    // 添加点击事件
+                    agent.addEventListener('click', () => {
+                        this.showAgentResult(key);
+                    });
+
+                    // 初始设置为不可点击
+                    agent.classList.add('disabled');
+                });
+
+                console.log(`初始化了 ${this.agents.size} 个Agent`);
+            }
+
+            setupCharCounter() {
+                const input = document.getElementById('topicInput');
+                const counter = document.getElementById('charCount');
+                
+                input.addEventListener('input', () => {
+                    const remaining = 60 - input.value.length;
+                    counter.textContent = remaining;
+                    
+                    if (remaining < 10) {
+                        counter.style.color = '#ff6b6b';
+                    } else {
+                        counter.style.color = 'white';
+                    }
+                });
+            }
+
+            async startDiscussion() {
+                const input = document.getElementById('topicInput');
+                const topic = input.value.trim();
+                
+                if (!topic) {
+                    this.showAlert('请输入讨论话题！');
+                    return;
+                }
+
+                if (this.discussionActive) {
+                    this.showAlert('讨论正在进行中，请稍等...');
+                    return;
+                }
+
+                this.currentTopic = topic;
+                this.discussionActive = true;
+                this.results.clear();
+                
+                // 禁用输入和按钮
+                input.disabled = true;
+                const startBtn = document.getElementById('startBtn');
+                startBtn.disabled = true;
+                startBtn.textContent = '讨论进行中...';
+                
+                // 显示进度条
+                document.getElementById('progressContainer').style.display = 'block';
+                this.updateProgress(0, 0);
+                
+                // 开始所有Agent的思考
+                this.startThinking();
+                
+                try {
+                    console.log('发起讨论:', topic);
+                    // 调用后台API
+                    await this.callBackendAPI(topic);
+                } catch (error) {
+                    console.error('API调用失败:', error);
+                    this.showError('系统暂时无法处理您的请求，请稍后再试。');
+                    this.resetSystem();
+                }
+            }
+
+            startThinking() {
+                this.agents.forEach((agentData, key) => {
+                    const statusBox = agentData.element.querySelector('.status-box');
+                    statusBox.textContent = '思考中';
+                    statusBox.className = 'status-box thinking';
+                    agentData.element.classList.add('disabled');
+                    agentData.status = 'thinking';
+                });
+            }
+
+            async callBackendAPI(topic) {
+                try {
+                    console.log('调用后台API...');
+                    
+                    // 发起讨论
+                    const response = await fetch('/api/discuss', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            topic: topic
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    this.sessionId = result.session_id;
+                    
+                    console.log('获得会话ID:', this.sessionId);
+                    
+                    // 开始轮询状态
+                    this.startPolling();
+                    
+                } catch (error) {
+                    console.log('API调用失败，使用模拟数据:', error);
+                    // 如果后台不可用，使用模拟数据
+                    await this.simulateThinking();
+                }
+            }
+
+            startPolling() {
+                if (this.pollInterval) {
+                    clearInterval(this.pollInterval);
+                }
+
+                this.pollInterval = setInterval(async () => {
+                    try {
+                        const response = await fetch(`/api/discuss/${this.sessionId}/status`);
+                        if (!response.ok) {
+                            console.error('状态轮询失败:', response.status);
+                            return;
+                        }
+                        
+                        const data = await response.json();
+                        console.log('轮询状态:', data);
+                        
+                        // 更新已完成的Agent状态
+                        Object.keys(data.results).forEach(agentKey => {
+                            if (this.agents.has(agentKey) && !this.results.has(agentKey)) {
+                                this.updateAgentStatus(agentKey, 'completed', data.results[agentKey].content);
+                            }
+                        });
+                        
+                        // 更新进度
+                        const completed = data.completed_agents.length;
+                        const total = data.total_agents;
+                        this.updateProgress(completed, total);
+                        
+                        // 如果所有Agent都完成了，停止轮询
+                        if (data.status === 'completed') {
+                            this.stopPolling();
+                            this.onDiscussionCompleted();
+                        } else if (data.status === 'error') {
+                            this.stopPolling();
+                            this.showError('讨论过程中发生错误');
+                            this.resetSystem();
+                        }
+                        
+                    } catch (error) {
+                        console.error('状态轮询失败:', error);
+                        // 不要立即停止轮询，可能是网络临时问题
+                    }
+                }, 1000); // 每秒轮询一次
+            }
+
+            stopPolling() {
+                if (this.pollInterval) {
+                    clearInterval(this.pollInterval);
+                    this.pollInterval = null;
+                    console.log('停止状态轮询');
+                }
+            }
+
+            async simulateThinking() {
+                console.log('使用模拟思考模式');
+                const agentKeys = Array.from(this.agents.keys());
+                
+                // 模拟随机完成时间
+                for (let i = 0; i < agentKeys.length; i++) {
+                    setTimeout(() => {
+                        const agentKey = agentKeys[i];
+                        const agentData = this.agents.get(agentKey);
+                        const result = this.generateSimulatedResponse(agentData.role, this.currentTopic);
+                        this.updateAgentStatus(agentKey, 'completed', result);
+                        
+                        // 更新进度
+                        const completed = Array.from(this.agents.values()).filter(a => a.status === 'completed').length;
+                        this.updateProgress(completed, this.agents.size);
+                        
+                        // 检查是否全部完成
+                        if (completed === this.agents.size) {
+                            this.onDiscussionCompleted();
+                        }
+                    }, Math.random() * 4000 + 1000); // 1-5秒随机延迟
+                }
+            }
+
+            generateSimulatedResponse(role, topic) {
+                const responses = {
+                    '科学家': `# 科学家的观点\n\n从科学角度分析"${topic}"，我认为需要基于**实证研究**和**数据分析**来探讨这个问题。\n\n## 研究方法\n- 采用科学验证流程\n- 收集量化数据\n- 建立假设模型\n\n## 结论\n基于现有科学证据，这个课题值得深入研究。`,
+                    
+                    '金融家': `# 金融家的观点\n\n关于"${topic}"这个话题，从**投资和资本市场**的角度来看，我们需要评估其商业价值和盈利模式。\n\n## 关键要素\n- 风险管控机制\n- 现金流分析\n- 市场需求评估\n\n## 投资建议\n建议采用分散投资策略，关注长期价值。`,
+                    
+                    '工程师': `# 工程师的观点\n\n从**技术实现**的角度分析"${topic}"，我们需要考虑系统架构和技术可行性。\n\n## 技术要点\n- 系统可扩展性\n- 性能优化方案\n- 维护成本控制\n\n## 实现建议\n采用模块化设计，确保系统稳定性。`,
+                    
+                    '领导': `# 领导的观点\n\n作为**团队领导者**，对于"${topic}"这个议题，我认为我们需要统筹规划，协调各方资源。\n\n## 管理重点\n- 资源分配优化\n- 目标设定明确\n- 风险管控机制\n\n## 执行建议\n建立跨部门协作机制，确保项目顺利推进。`,
+                    
+                    '企业家': `# 企业家的观点\n\n从**商业创新**的视角来看"${topic}"，我看到了巨大的市场机遇。\n\n## 商业洞察\n- 用户痛点分析\n- 市场机会识别\n- 竞争优势构建\n\n## 创业建议\n快速迭代，抓住用户痛点，建立竞争壁垒。`,
+                    
+                    '艺术家': `# 艺术家的观点\n\n"${topic}"给我很多创意灵感！从**美学和用户体验**的角度思考这个问题。\n\n## 设计理念\n- 情感共鸣设计\n- 视觉呈现优化\n- 用户体验提升\n\n## 创意建议\n注重美学价值，让解决方案更具人文关怀。`
+                };
+                
+                return responses[role] || `# ${role}的观点\n\n关于"${topic}"，这是一个值得深入思考的话题，从${role}的专业角度来看，需要进行全面的分析和考虑。`;
+            }
+
+            updateAgentStatus(agentKey, status, result = null) {
+                const agentData = this.agents.get(agentKey);
+                if (!agentData) return;
+
+                const statusBox = agentData.element.querySelector('.status-box');
+                
+                agentData.status = status;
+                
+                switch (status) {
+                    case 'completed':
+                        statusBox.textContent = '有观点';
+                        statusBox.className = 'status-box completed';
+                        agentData.element.classList.remove('disabled');
+                        if (result) {
+                            this.results.set(agentKey, result);
+                        }
+                        console.log(`Agent ${agentKey} 完成思考`);
+                        break;
+                        
+                    case 'thinking':
+                        statusBox.textContent = '思考中';
+                        statusBox.className = 'status-box thinking';
+                        agentData.element.classList.add('disabled');
+                        break;
+                        
+                    case 'error':
+                        statusBox.textContent = '出错了';
+                        statusBox.className = 'status-box error';
+                        agentData.element.classList.add('disabled');
+                        if (result) {
+                            this.results.set(agentKey, result);
+                        }
+                        break;
+                        
+                    default:
+                        statusBox.textContent = '等待开始';
+                        statusBox.className = 'status-box';
+                        agentData.element.classList.add('disabled');
+                }
+            }
+
+            updateProgress(completed, total) {
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('progressText');
+                
+                if (total > 0) {
+                    const percentage = (completed / total) * 100;
+                    progressBar.style.width = `${percentage}%`;
+                    progressText.textContent = `讨论进度：${completed}/${total}`;
+                }
+            }
+
+            onDiscussionCompleted() {
+                console.log('所有Agent讨论完成');
+                this.discussionActive = false;
+                
+                // 恢复输入控件
+                const input = document.getElementById('topicInput');
+                const startBtn = document.getElementById('startBtn');
+                
+                input.disabled = false;
+                startBtn.disabled = false;
+                startBtn.textContent = '发起讨论';
+                
+                // 显示完成提示
+                this.showAlert('所有Agent都完成了思考！点击头像查看观点。', 'success');
+            }
+
+            showAgentResult(agentKey) {
+                const agentData = this.agents.get(agentKey);
+                if (!agentData || agentData.status !== 'completed') {
+                    if (agentData && agentData.status === 'thinking') {
+                        this.showAlert('该Agent正在思考中，请稍等...');
+                    } else if (agentData && agentData.status === 'error') {
+                        this.showAlert('该Agent思考时出现了错误');
+                    } else {
+                        this.showAlert('该Agent还未开始思考');
+                    }
+                    return;
+                }
+                
+                const result = this.results.get(agentKey);
+                if (!result) {
+                    this.showAlert('暂无思考结果');
+                    return;
+                }
+                
+                // 设置模态框内容
+                document.getElementById('agentEmoji').textContent = agentData.emoji;
+                document.getElementById('agentName').textContent = `${agentData.role}的观点`;
+                
+                // 使用marked库将markdown转换为HTML
+                const htmlContent = marked.parse(result);
+                document.getElementById('modalBody').innerHTML = `<div class="markdown-content">${htmlContent}</div>`;
+                
+                // 显示模态框
+                document.getElementById('resultModal').classList.add('show');
+                
+                console.log(`显示Agent ${agentKey} 的结果`);
+            }
+
+            closeModal() {
+                document.getElementById('resultModal').classList.remove('show');
+            }
+
+            showAlert(message, type = 'info') {
+                // 简单的alert实现，可以替换为更美观的通知组件
+                const alertColors = {
+                    'info': '#17a2b8',
+                    'success': '#28a745', 
+                    'error': '#dc3545',
+                    'warning': '#ffc107'
+                };
+                
+                // 创建自定义通知
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: ${alertColors[type] || alertColors.info};
+                    color: white;
+                    padding: 15px 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    z-index: 9999;
+                    font-size: 14px;
+                    max-width: 300px;
+                    word-wrap: break-word;
+                    animation: slideInRight 0.3s ease;
+                `;
+                notification.textContent = message;
+                
+                document.body.appendChild(notification);
+                
+                // 3秒后自动移除
+                setTimeout(() => {
+                    notification.style.animation = 'slideOutRight 0.3s ease';
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            document.body.removeChild(notification);
+                        }
+                    }, 300);
+                }, 3000);
+            }
+
+            showError(message) {
+                this.showAlert(message, 'error');
+                console.error('系统错误:', message);
+            }
+
+            resetSystem() {
+                console.log('重置系统状态');
+                
+                this.discussionActive = false;
+                this.stopPolling();
+                this.sessionId = null;
+                this.results.clear();
+                
+                // 恢复输入控件
+                const input = document.getElementById('topicInput');
+                const startBtn = document.getElementById('startBtn');
+                
+                input.disabled = false;
+                startBtn.disabled = false;
+                startBtn.textContent = '发起讨论';
+                
+                // 隐藏进度条
+                document.getElementById('progressContainer').style.display = 'none';
+                
+                // 重置所有Agent状态
+                this.agents.forEach((agentData, key) => {
+                    this.updateAgentStatus(key, 'waiting');
+                });
+            }
+
+            // 添加一些调试方法
+            getSystemStatus() {
+                return {
+                    discussionActive: this.discussionActive,
+                    sessionId: this.sessionId,
+                    currentTopic: this.currentTopic,
+                    agentCount: this.agents.size,
+                    completedResults: this.results.size,
+                    agentStatuses: Array.from(this.agents.entries()).map(([key, data]) => ({
+                        key,
+                        role: data.role,
+                        status: data.status
+                    }))
+                };
+            }
+        }
+
+        // 添加CSS动画
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            
+            @keyframes slideOutRight {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // 初始化系统
+        let discussionSystem;
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            discussionSystem = new DiscussionSystem();
+            
+            // 添加全局调试接口
+            window.discussionSystem = discussionSystem;
+            
+            console.log('AI Agent圆桌讨论系统已启动');
+            console.log('使用 window.discussionSystem.getSystemStatus() 查看系统状态');
+        });
+
+        // 页面卸载时清理资源
+        window.addEventListener('beforeunload', () => {
+            if (discussionSystem) {
+                discussionSystem.stopPolling();
+            }
+        });
+    </script>
+</body>
+</html>
