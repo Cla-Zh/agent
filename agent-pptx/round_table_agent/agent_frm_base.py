@@ -3,9 +3,13 @@
 基于Agno框架的Agent基类和多态实现
 支持不同的prompt、工具和行为模式
 """
-from agno import Agent, Memory, Tool, PromptTemplate
-from agno.tools import WebSearchTool, CodeExecutorTool, FileManagerTool
-from agno.memory import ConversationMemory, VectorMemory
+from agno.agent import Agent
+from agno.models.deepseek import DeepSeek
+from agno.tools.reasoning import ReasoningTools
+from agno.tools.file import FileTools
+from agno.tools.googlesearch import GoogleSearchTools
+from agno.tools.arxiv import ArxivTools
+
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional, Union
 import asyncio
@@ -13,8 +17,9 @@ import logging
 import random
 from dataclasses import dataclass
 from enum import Enum
+from textwrap import dedent
 
-from round_table_agent.agent_factory import AgentFactory
+
 
 
 class AgentType(Enum):
@@ -47,13 +52,13 @@ class AgentType(Enum):
 #         def __init__(self, *args, **kwargs):
 #             pass
     
-#     class Tool:
-#         def __init__(self, *args, **kwargs):
-#             pass
+class Tool:
+    def __init__(self, *args, **kwargs):
+        pass
     
-#     class PromptTemplate:
-#         def __init__(self, template: str):
-#             self.template = template
+class PromptTemplate:
+    def __init__(self, template: str):
+        self.template = template
  
 
 
@@ -62,7 +67,6 @@ class AgentConfig:
     """Agent配置类"""
     name: str
     agent_type: AgentType
-    model: str = "gpt-4"
     temperature: float = 0.7
     max_tokens: int = 2000
     memory_size: int = 10
@@ -74,6 +78,7 @@ class AgentBase(ABC):
     
     def __init__(self, config: AgentConfig, name: str, role: str):
         self.config = config
+        self.model = DeepSeek(id="deepseek-chat", api_key = "sk-f25b9b7c1f854a1898098ed0f6126471")
         self.name = config.name
         self.agent_type = config.agent_type
         self.logger = self._setup_logger()
@@ -99,16 +104,13 @@ class AgentBase(ABC):
             logger.addHandler(handler)
         return logger
     
-    def _setup_memory(self) -> Memory:
+    def _setup_memory(self):
         """设置记忆组件"""
-        # 使用对话记忆作为默认实现
-        try:
-            return ConversationMemory(max_size=self.config.memory_size)
-        except:
-            return Memory()
+        pass
+
     
     @abstractmethod
-    def _setup_tools(self) -> List[Tool]:
+    def _setup_tools(self):
         """设置工具 - 子类必须实现"""
         pass
     
@@ -120,16 +122,17 @@ class AgentBase(ABC):
     def _setup_agent(self) -> Agent:
         """设置Agno Agent"""
         try:
+            # 初始化Agent
             return Agent(
-                name=self.name,
-                model=self.config.model,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-                memory=self.memory,
-                tools=self.tools if self.config.enable_tools else [],
-                prompt_template=self.prompt_template
+                model=self.model,
+                instructions=dedent(self.prompt_template.template),
+                tools=self.tools,
+                show_tool_calls=True,
+                add_references=True,
+                markdown=True,
             )
-        except:
+        except Exception as e:
+            self.logger.error(f"Agent初始化失败: {str(e)}")
             return Agent()
     
     async def process(self, input_text: str, context: Optional[Dict] = None) -> str:
@@ -173,7 +176,7 @@ class AgentBase(ABC):
         """后处理输出 - 子类可重写"""
         return output
     
-    def add_tool(self, tool: Tool):
+    def add_tool(self, tool):
         """动态添加工具"""
         if tool not in self.tools:
             self.tools.append(tool)
@@ -213,25 +216,10 @@ class AgentBase(ABC):
 async def main():
     """示例使用代码"""
     
-    # 创建不同类型的Agent
-    researcher = AgentFactory.create_researcher("AI研究员")
-    coder = AgentFactory.create_coder("Python开发者") 
-    assistant = AgentFactory.create_assistant("通用助手")
-    analyst = AgentFactory.create_analyst("数据分析师")
+    # 这里可以导入AgentFactory来创建Agent
+    # from round_table_agent.agent_factory import AgentFactory
     
-    # 测试不同Agent的处理能力
-    tasks = [
-        (researcher, "研究一下最新的AI技术趋势"),
-        (coder, "写一个Python排序算法"),
-        (assistant, "今天天气怎么样？"),
-        (analyst, "分析这组销售数据的趋势")
-    ]
-    
-    for agent, task in tasks:
-        print(f"\n=== {agent.name} ===")
-        print(f"状态: {agent.get_status()}")
-        result = await agent.process(task)
-        print(f"处理结果: {result}")
+    print("Agent基类定义完成")
 
 
 if __name__ == "__main__":

@@ -7,6 +7,10 @@ import os
 import sys
 from pathlib import Path
 
+import os
+os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7897'
+os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7897'
+
 def create_static_directory():
     """创建静态文件目录"""
     static_dir = Path("static")

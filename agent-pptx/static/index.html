@@ -6,6 +6,22 @@
     <title>AI Agent圆桌讨论</title>
     <!-- 引入markdown解析库 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/5.1.1/marked.min.js"></script>
+    <!-- 备用CDN -->
+    <script>
+        // 检查marked库是否加载成功
+        setTimeout(() => {
+            if (typeof marked === 'undefined') {
+                console.log('主要CDN加载失败，尝试备用CDN');
+                const script = document.createElement('script');
+                script.src = 'https://unpkg.com/marked@5.1.1/marked.min.js';
+                script.onload = () => console.log('备用CDN加载成功');
+                script.onerror = () => console.log('备用CDN也加载失败，将使用简单转换');
+                document.head.appendChild(script);
+            } else {
+                console.log('marked库加载成功');
+            }
+        }, 1000);
+    </script>
     <style>
         * {
             margin: 0;
@@ -179,7 +195,7 @@
             align-items: center;
             gap: 50px;
             max-width: 70%;
-            margin: 20px auto;
+            margin: 80px auto 20px;
         }
 
         .agent-row {
@@ -322,7 +338,7 @@
             width: 100%;
             max-width: 400px;
             text-align: center;
-            margin: 40px auto 0;
+            margin: 90px auto 0;
         }
 
         .topic-input {
@@ -1074,6 +1090,7 @@
             async simulateThinking() {
                 console.log('使用模拟思考模式');
                 const agentKeys = Array.from(this.agents.keys());
+                let completedCount = 0;
                 
                 // 模拟随机完成时间
                 for (let i = 0; i < agentKeys.length; i++) {
@@ -1081,14 +1098,23 @@
                         const agentKey = agentKeys[i];
                         const agentData = this.agents.get(agentKey);
                         const result = this.generateSimulatedResponse(agentData.role, this.currentTopic);
+                        
+                        console.log(`模拟Agent ${agentKey} 完成思考，生成结果:`, result.substring(0, 100) + '...');
+                        
+                        // 先存储结果，再更新状态
+                        this.results.set(agentKey, result);
                         this.updateAgentStatus(agentKey, 'completed', result);
                         
-                        // 更新进度
-                        const completed = Array.from(this.agents.values()).filter(a => a.status === 'completed').length;
-                        this.updateProgress(completed, this.agents.size);
+                        completedCount++;
+                        this.updateProgress(completedCount, this.agents.size);
+                        
+                        // 验证结果是否正确存储
+                        console.log(`验证Agent ${agentKey} 结果存储:`, this.results.has(agentKey));
+                        console.log(`当前完成进度: ${completedCount}/${this.agents.size}`);
                         
                         // 检查是否全部完成
-                        if (completed === this.agents.size) {
+                        if (completedCount === this.agents.size) {
+                            console.log('所有Agent模拟完成');
                             this.onDiscussionCompleted();
                         }
                     }, Math.random() * 4000 + 1000); // 1-5秒随机延迟
@@ -1114,8 +1140,13 @@
             }
 
             updateAgentStatus(agentKey, status, result = null) {
+                console.log(`更新Agent ${agentKey} 状态为: ${status}`, result ? '有结果' : '无结果');
+                
                 const agentData = this.agents.get(agentKey);
-                if (!agentData) return;
+                if (!agentData) {
+                    console.error(`Agent ${agentKey} 不存在`);
+                    return;
+                }
 
                 const statusBox = agentData.element.querySelector('.status-box');
                 
@@ -1126,8 +1157,13 @@
                         statusBox.textContent = '有观点';
                         statusBox.className = 'status-box completed';
                         agentData.element.classList.remove('disabled');
-                        if (result) {
+                        if (result && !this.results.has(agentKey)) {
                             this.results.set(agentKey, result);
+                            console.log(`存储Agent ${agentKey} 的结果，当前结果数量: ${this.results.size}`);
+                        } else if (result) {
+                            console.log(`Agent ${agentKey} 结果已存在，跳过存储`);
+                        } else {
+                            console.warn(`Agent ${agentKey} 完成但无结果数据`);
                         }
                         console.log(`Agent ${agentKey} 完成思考`);
                         break;
@@ -1152,6 +1188,8 @@
                         statusBox.className = 'status-box';
                         agentData.element.classList.add('disabled');
                 }
+                
+                console.log(`Agent ${agentKey} 状态更新完成，当前状态: ${agentData.status}`);
             }
 
             updateProgress(completed, total) {
@@ -1167,6 +1205,12 @@
 
             onDiscussionCompleted() {
                 console.log('所有Agent讨论完成');
+                console.log('最终结果统计:', {
+                    totalAgents: this.agents.size,
+                    completedResults: this.results.size,
+                    results: Array.from(this.results.keys())
+                });
+                
                 this.discussionActive = false;
                 
                 // 恢复输入控件
@@ -1182,21 +1226,58 @@
             }
 
             showAgentResult(agentKey) {
+                console.log(`尝试显示Agent ${agentKey} 的结果`);
+                console.log('当前系统状态:', this.getSystemStatus());
+                
                 const agentData = this.agents.get(agentKey);
-                if (!agentData || agentData.status !== 'completed') {
-                    if (agentData && agentData.status === 'thinking') {
+                console.log('Agent数据:', agentData);
+                
+                if (!agentData) {
+                    this.showAlert('Agent数据不存在');
+                    return;
+                }
+                
+                // 检查状态
+                if (agentData.status !== 'completed') {
+                    if (agentData.status === 'thinking') {
                         this.showAlert('该Agent正在思考中，请稍等...');
-                    } else if (agentData && agentData.status === 'error') {
+                    } else if (agentData.status === 'error') {
                         this.showAlert('该Agent思考时出现了错误');
                     } else {
-                        this.showAlert('该Agent还未开始思考');
+                        this.showAlert(`该Agent还未开始思考，当前状态：${agentData.status}`);
                     }
                     return;
                 }
                 
+                // 检查结果是否存在
                 const result = this.results.get(agentKey);
+                console.log('获取到的结果:', result);
+                
                 if (!result) {
-                    this.showAlert('暂无思考结果');
+                    // 如果状态是completed但没有结果，尝试重新生成
+                    console.log('状态为completed但无结果，尝试重新生成');
+                    const newResult = this.generateSimulatedResponse(agentData.role, this.currentTopic);
+                    this.results.set(agentKey, newResult);
+                    console.log('重新生成结果:', newResult.substring(0, 100) + '...');
+                    
+                    // 设置模态框内容
+                    document.getElementById('agentEmoji').textContent = agentData.emoji;
+                    document.getElementById('agentName').textContent = `${agentData.role}的观点`;
+                    
+                    // 使用marked库将markdown转换为HTML，如果库不可用则使用简单转换
+                    let htmlContent;
+                    if (typeof marked !== 'undefined') {
+                        htmlContent = marked.parse(newResult);
+                    } else {
+                        // 简单的markdown到HTML转换
+                        htmlContent = this.simpleMarkdownToHtml(newResult);
+                    }
+                    document.getElementById('modalBody').innerHTML = `<div class="markdown-content">${htmlContent}</div>`;
+                    
+                    // 显示模态框
+                    document.getElementById('resultModal').classList.add('show');
+                    
+                    console.log(`成功显示Agent ${agentKey} 的重新生成结果`);
                     return;
                 }
                 
@@ -1204,14 +1285,20 @@
                 document.getElementById('agentEmoji').textContent = agentData.emoji;
                 document.getElementById('agentName').textContent = `${agentData.role}的观点`;
                 
-                // 使用marked库将markdown转换为HTML
-                const htmlContent = marked.parse(result);
+                // 使用marked库将markdown转换为HTML，如果库不可用则使用简单转换
+                let htmlContent;
+                if (typeof marked !== 'undefined') {
+                    htmlContent = marked.parse(result);
+                } else {
+                    // 简单的markdown到HTML转换
+                    htmlContent = this.simpleMarkdownToHtml(result);
+                }
                 document.getElementById('modalBody').innerHTML = `<div class="markdown-content">${htmlContent}</div>`;
                 
                 // 显示模态框
                 document.getElementById('resultModal').classList.add('show');
                 
-                console.log(`显示Agent ${agentKey} 的结果`);
+                console.log(`成功显示Agent ${agentKey} 的结果`);
             }
 
             closeModal() {
@@ -1287,6 +1374,45 @@
                 this.agents.forEach((agentData, key) => {
                     this.updateAgentStatus(key, 'waiting');
                 });
+            }
+
+            // 简单的markdown到HTML转换方法
+            simpleMarkdownToHtml(markdown) {
+                if (!markdown) return '';
+                
+                let html = markdown
+                    // 标题
+                    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                    
+                    // 粗体
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    
+                    // 列表项
+                    .replace(/^- (.*$)/gim, '<li>$1</li>')
+                    
+                    // 包装列表
+                    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+                    
+                    // 段落
+                    .split('\n')
+                    .map(line => {
+                        if (line.trim() === '') return '</p><p>';
+                        if (line.trim().startsWith('<h') || line.trim().startsWith('<ul>') || line.trim().startsWith('</ul>')) {
+                            return line;
+                        }
+                        return line;
+                    })
+                    .join('\n')
+                    
+                    // 清理和包装
+                    .replace(/<p><\/p>/g, '')
+                    .replace(/^(.+)$/gm, '<p>$1</p>')
+                    .replace(/<p>(<h[1-6]>.*<\/h[1-6]>)<\/p>/g, '$1')
+                    .replace(/<p>(<ul>.*<\/ul>)<\/p>/g, '$1');
+                
+                return html;
             }
 
             // 添加一些调试方法

@@ -1,5 +1,7 @@
 from .agent_frm_base import AgentBase, Tool, PromptTemplate
 from typing import List, Dict, Optional
+from agno.tools.reasoning import ReasoningTools
+from agno.tools.googlesearch import GoogleSearchTools
 import asyncio
 import logging
 
@@ -20,17 +22,12 @@ class EntrepreneurAgent(AgentBase):
         """设置商业创新相关工具"""
         tools = []
         try:
-            tools.extend([
-                # MarketAnalysisTool(),
-                # BusinessPlanGeneratorTool(),
-                # FinancialProjectionTool(),
-                # CompetitiveAnalysisTool()
-            ])
-        except:
-            # 模拟工具
-            tools = [Tool(), Tool(), Tool(), Tool()]
-        
-        self.logger.info(f"EntrepreneurAgent加载了{len(tools)}个工具")
+            tools=[
+                    ReasoningTools(add_instructions=True),
+                    GoogleSearchTools(),
+                ]
+        except Exception as e:
+            self.logger.error(f"工具初始化失败: {str(e)}")
         return tools
     
     def _setup_prompt(self) -> PromptTemplate:
