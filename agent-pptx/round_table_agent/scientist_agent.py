@@ -61,6 +61,7 @@ class ScientistAgent(AgentBase):
 
     async def think(self, topic: str) -> str:
         await self._simulate_thinking_time()
+        logger = self.get_logger()
         logger.info(f"科学家Agent正在分析话题: {topic}")
         
         # 使用基类的process方法进行实际推理

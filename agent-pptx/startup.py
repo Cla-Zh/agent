@@ -36,15 +36,15 @@ def main():
     
     print("✅ 系统配置检查完成")
     print("🔒 并发安全特性已启用")
-    print("🌐 服务器启动地址：http://localhost:8000")
-    print("📖 API文档地址：http://localhost:8000/docs")
+    print("🌐 服务器启动地址：http://localhost:5000")
+    print("📖 API文档地址：http://localhost:5000/docs")
     print("📊 支持多用户并发访问，数据完全隔离")
     
     # 启动服务器 - 使用优化后的并发安全版本
     uvicorn.run(
         "main_optimized:app",
         host="0.0.0.0",
-        port=8000,
+        port=5000,
         reload=True,
         log_level="info"
     )

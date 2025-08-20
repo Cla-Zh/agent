@@ -126,6 +126,12 @@ class AgentBase(ABC):
             logger.addHandler(handler)
         return logger
     
+    def get_logger(self) -> logging.Logger:
+        """获取日志记录器 - 优先使用会话专用日志记录器"""
+        if hasattr(self, 'session_logger') and self.session_logger:
+            return self.session_logger
+        return self.logger
+    
     def _setup_memory(self):
         """设置记忆组件"""
         pass
@@ -154,13 +160,15 @@ class AgentBase(ABC):
                 markdown=True,
             )
         except Exception as e:
-            self.logger.error(f"Agent初始化失败: {str(e)}")
+            logger = self.get_logger()
+            logger.error(f"Agent初始化失败: {str(e)}")
             return Agent()
     
     async def process(self, input_text: str, context: Optional[Dict] = None) -> str:
         """处理输入并返回结果"""
         try:
-            self.logger.info(f"处理输入: {input_text[:50]}...")
+            logger = self.get_logger()
+            logger.info(f"处理输入: {input_text[:50]}...")
             
             # 预处理
             processed_input = await self._preprocess_input(input_text, context)
@@ -171,11 +179,12 @@ class AgentBase(ABC):
             # 后处理
             final_result = await self._postprocess_output(result)
             
-            self.logger.info(f"处理完成")
+            logger.info(f"处理完成")
             return final_result
             
         except Exception as e:
-            self.logger.error(f"处理过程中发生错误: {str(e)}")
+            logger = self.get_logger()
+            logger.error(f"处理过程中发生错误: {str(e)}")
             return f"处理失败: {str(e)}"
     
     async def _preprocess_input(self, input_text: str, context: Optional[Dict] = None) -> str:
@@ -211,12 +220,14 @@ class AgentBase(ABC):
         """动态添加工具"""
         if tool not in self.tools:
             self.tools.append(tool)
-            self.logger.info(f"添加工具: {tool.__class__.__name__}")
+            logger = self.get_logger()
+            logger.info(f"添加工具: {tool.__class__.__name__}")
     
     def remove_tool(self, tool_class: type):
         """移除工具"""
         self.tools = [tool for tool in self.tools if not isinstance(tool, tool_class)]
-        self.logger.info(f"移除工具: {tool_class.__name__}")
+        logger = self.get_logger()
+        logger.info(f"移除工具: {tool_class.__name__}")
     
     def get_status(self) -> Dict[str, Any]:
         """获取Agent状态"""

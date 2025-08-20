@@ -188,6 +188,76 @@ wrk -t12 -c400 -d30s http://localhost:8000/
 - 验证结果隔离
 - 检查资源清理
 
+## 日志隔离优化
+
+### 问题描述
+在多用户并发使用时，所有用户的日志都混在一起，难以区分不同用户的推理过程。
+
+### 解决方案
+
+#### 1. 会话专用日志记录器
+```python
+def get_session_logger(session_id: str, agent_name: str = None) -> logging.Logger:
+    """为指定会话创建独立的日志记录器"""
+    if agent_name:
+        logger_name = f"Session-{session_id}-Agent-{agent_name}"
+    else:
+        logger_name = f"Session-{session_id}"
+    
+    session_logger = logging.getLogger(logger_name)
+    # 配置会话专用的日志格式和处理器
+```
+
+#### 2. 日志文件分离
+- 每个会话有独立的日志文件：`logs/session_<session_id>.log`
+- 控制台日志包含会话ID标识：`[Session-<session_id>]`
+- 支持按会话查看和搜索日志
+
+#### 3. Agent日志隔离
+```python
+def get_logger(self) -> logging.Logger:
+    """获取日志记录器 - 优先使用会话专用日志记录器"""
+    if hasattr(self, 'session_logger') and self.session_logger:
+        return self.session_logger
+    return self.logger
+```
+
+### 日志查看工具
+
+#### 1. 测试工具
+```bash
+# 运行多用户并发测试
+python test_concurrent_logging.py
+```
+
+#### 2. 日志查看工具
+```bash
+# 启动日志查看工具
+python log_viewer.py
+```
+
+功能包括：
+- 列出所有会话日志文件
+- 查看指定会话的详细日志
+- 搜索日志内容
+- 显示最近活动
+
+### 日志格式示例
+
+#### 控制台日志
+```
+2024-01-15 10:30:15 - [Session-abc123] - Session-abc123 - INFO - 创建新讨论会话，话题: 人工智能应用
+2024-01-15 10:30:16 - [Session-abc123] - Session-abc123-Agent-科学家 - INFO - 科学家Agent正在分析话题: 人工智能应用
+2024-01-15 10:30:18 - [Session-def456] - Session-def456 - INFO - 创建新讨论会话，话题: 区块链技术
+```
+
+#### 文件日志
+```
+2024-01-15 10:30:15 - Session-abc123 - INFO - 创建新讨论会话，话题: 人工智能应用
+2024-01-15 10:30:16 - Session-abc123-Agent-科学家 - INFO - 科学家Agent正在分析话题: 人工智能应用
+2024-01-15 10:30:17 - Session-abc123-Agent-科学家 - INFO - 处理输入: 人工智能应用...
+```
+
 ## 总结
 
 通过以上优化，系统现在可以：
@@ -197,5 +267,6 @@ wrk -t12 -c400 -d30s http://localhost:8000/
 3. ✅ **提供线程安全**：所有共享资源都有锁保护
 4. ✅ **自动资源管理**：过期会话自动清理，防止内存泄漏
 5. ✅ **性能监控**：实时监控系统性能，及时发现问题
+6. ✅ **日志隔离**：每个会话有独立的日志记录，便于调试和监控
 
-这些改进使得系统能够安全、稳定地支持多用户并发使用，每个用户的推理流程和结果都完全独立，不会相互干扰。
+这些改进使得系统能够安全、稳定地支持多用户并发使用，每个用户的推理流程和结果都完全独立，不会相互干扰。同时，通过日志隔离功能，可以清晰地跟踪每个用户的推理过程，便于问题排查和性能分析。

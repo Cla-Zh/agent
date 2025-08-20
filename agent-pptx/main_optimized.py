@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import logging
 import threading
 from contextlib import asynccontextmanager
+import os
 
 from agents import AgentManager
 from models import DiscussionRequest, DiscussionResponse, AgentResult
@@ -21,9 +22,50 @@ from round_table_agent.manager_agent import ManagerAgent
 from round_table_agent.scientist_agent import ScientistAgent
 from round_table_agent.software_architect_agent import SoftwareArchitectAgent
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
+# 配置基础日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('agent_discussion.log', encoding='utf-8')
+    ]
+)
 logger = logging.getLogger(__name__)
+
+def get_session_logger(session_id: str, agent_name: str = None) -> logging.Logger:
+    """为指定会话创建独立的日志记录器"""
+    if agent_name:
+        logger_name = f"Session-{session_id}-Agent-{agent_name}"
+    else:
+        logger_name = f"Session-{session_id}"
+    
+    session_logger = logging.getLogger(logger_name)
+    session_logger.setLevel(logging.INFO)
+    
+    # 避免重复添加处理器
+    if not session_logger.handlers:
+        # 控制台处理器
+        console_handler = logging.StreamHandler()
+        console_formatter = logging.Formatter(
+            f'%(asctime)s - [Session-{session_id}] - %(name)s - %(levelname)s - %(message)s'
+        )
+        console_handler.setFormatter(console_formatter)
+        session_logger.addHandler(console_handler)
+        
+        # 文件处理器 - 按会话分文件
+        file_handler = logging.FileHandler(
+            f'logs/session_{session_id}.log', 
+            encoding='utf-8',
+            mode='a'
+        )
+        file_formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        file_handler.setFormatter(file_formatter)
+        session_logger.addHandler(file_handler)
+    
+    return session_logger
 
 # 线程安全的会话存储
 class ThreadSafeDiscussionStore:
@@ -32,6 +74,8 @@ class ThreadSafeDiscussionStore:
     def __init__(self):
         self._discussions: Dict[str, Dict] = {}
         self._lock = threading.RLock()
+        # 创建日志目录
+        os.makedirs('logs', exist_ok=True)
     
     def create_session(self, session_id: str, topic: str) -> None:
         """创建新的讨论会话"""
@@ -42,8 +86,12 @@ class ThreadSafeDiscussionStore:
                 "created_at": datetime.now(),
                 "results": {},
                 "completed_agents": [],
-                "last_accessed": datetime.now()
+                "last_accessed": datetime.now(),
+                "logger": get_session_logger(session_id)  # 为会话创建专用日志记录器
             }
+            # 记录会话创建日志
+            session_logger = self._discussions[session_id]["logger"]
+            session_logger.info(f"创建新讨论会话，话题: {topic}")
     
     def get_session(self, session_id: str) -> Dict:
         """获取会话数据"""
@@ -52,6 +100,13 @@ class ThreadSafeDiscussionStore:
                 self._discussions[session_id]["last_accessed"] = datetime.now()
                 return self._discussions[session_id].copy()
             return None
+    
+    def get_session_logger(self, session_id: str) -> logging.Logger:
+        """获取会话专用的日志记录器"""
+        with self._lock:
+            if session_id in self._discussions:
+                return self._discussions[session_id]["logger"]
+            return logger  # 返回默认日志记录器
     
     def update_session(self, session_id: str, updates: Dict) -> None:
         """更新会话数据"""
@@ -64,6 +119,9 @@ class ThreadSafeDiscussionStore:
         """删除会话"""
         with self._lock:
             if session_id in self._discussions:
+                # 记录会话删除日志
+                session_logger = self._discussions[session_id]["logger"]
+                session_logger.info(f"删除讨论会话")
                 del self._discussions[session_id]
     
     def cleanup_expired_sessions(self, max_age_hours: int = 24) -> None:
@@ -76,6 +134,8 @@ class ThreadSafeDiscussionStore:
             ]
             
             for session_id in expired_sessions:
+                session_logger = self._discussions[session_id]["logger"]
+                session_logger.info(f"清理过期会话")
                 del self._discussions[session_id]
                 logger.info(f"清理过期会话: {session_id}")
             
@@ -103,11 +163,16 @@ class ThreadSafeAgentManager:
         with self._lock:
             if session_id not in self._session_agents:
                 # 为每个会话创建独立的Agent实例
-                self._session_agents[session_id] = {
-                    key: factory_class() 
-                    for key, factory_class in self._agent_factories.items()
-                }
-                logger.info(f"为会话 {session_id} 创建了 {len(self._agent_factories)} 个Agent实例")
+                self._session_agents[session_id] = {}
+                for key, factory_class in self._agent_factories.items():
+                    agent = factory_class()
+                    # 为Agent设置会话专用的日志记录器
+                    agent.session_id = session_id
+                    agent.session_logger = get_session_logger(session_id, agent.name)
+                    self._session_agents[session_id][key] = agent
+                
+                session_logger = get_session_logger(session_id)
+                session_logger.info(f"为会话创建了 {len(self._agent_factories)} 个Agent实例")
             
             return self._session_agents[session_id]
     
@@ -115,8 +180,9 @@ class ThreadSafeAgentManager:
         """清理指定会话的Agent实例"""
         with self._lock:
             if session_id in self._session_agents:
+                session_logger = get_session_logger(session_id)
+                session_logger.info(f"清理会话的Agent实例")
                 del self._session_agents[session_id]
-                logger.info(f"清理会话 {session_id} 的Agent实例")
 
 # 全局实例
 discussion_store = ThreadSafeDiscussionStore()
@@ -235,7 +301,8 @@ async def delete_discussion(session_id: str):
 async def process_discussion(session_id: str, topic: str):
     """异步处理讨论 - 多Agent并发思考"""
     try:
-        logger.info(f"开始处理讨论 {session_id}: {topic}")
+        session_logger = discussion_store.get_session_logger(session_id)
+        session_logger.info(f"开始处理讨论: {topic}")
         
         # 获取该会话专用的Agent实例
         agents = agent_manager.get_agents_for_session(session_id)
@@ -255,20 +322,22 @@ async def process_discussion(session_id: str, topic: str):
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 agent_key = list(agents.keys())[i]
-                logger.error(f"Agent {agent_key} 执行异常: {result}")
+                session_logger.error(f"Agent {agent_key} 执行异常: {result}")
         
         # 更新讨论状态为完成
         discussion_store.update_session(session_id, {"status": "completed"})
-        logger.info(f"讨论 {session_id} 已完成")
+        session_logger.info(f"讨论已完成")
         
     except Exception as e:
-        logger.error(f"讨论处理错误: {e}")
+        session_logger = discussion_store.get_session_logger(session_id)
+        session_logger.error(f"讨论处理错误: {e}")
         discussion_store.update_session(session_id, {"status": "error"})
 
 async def run_agent_thinking(session_id: str, agent_key: str, agent, topic: str):
     """运行单个Agent的思考过程"""
     try:
-        logger.info(f"Agent {agent_key} 开始思考话题: {topic}")
+        session_logger = discussion_store.get_session_logger(session_id)
+        session_logger.info(f"Agent {agent_key} 开始思考话题: {topic}")
         
         # 调用Agent的思考方法
         result = await agent.think(topic)
@@ -292,10 +361,11 @@ async def run_agent_thinking(session_id: str, agent_key: str, agent, topic: str)
                 "completed_agents": discussion["completed_agents"]
             })
         
-        logger.info(f"Agent {agent_key} 思考完成")
+        session_logger.info(f"Agent {agent_key} 思考完成")
         
     except Exception as e:
-        logger.error(f"Agent {agent_key} 思考错误: {e}")
+        session_logger = discussion_store.get_session_logger(session_id)
+        session_logger.error(f"Agent {agent_key} 思考错误: {e}")
         
         error_data = {
             "agent_key": agent_key,
