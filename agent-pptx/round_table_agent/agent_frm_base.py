@@ -15,11 +15,31 @@ from typing import Dict, List, Any, Optional, Union
 import asyncio
 import logging
 import random
+import os
 from dataclasses import dataclass
 from enum import Enum
 from textwrap import dedent
 
 
+def read_api_key() -> str:
+    """从api-key.txt文件中读取API key"""
+    try:
+        # 获取当前文件所在目录的上级目录
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        api_key_path = os.path.join(parent_dir, "api-key.txt")
+        
+        with open(api_key_path, 'r', encoding='utf-8') as f:
+            api_key = f.read().strip()
+        
+        if not api_key:
+            raise ValueError("API key文件为空")
+        
+        return api_key
+    except FileNotFoundError:
+        raise FileNotFoundError(f"找不到API key文件: {api_key_path}")
+    except Exception as e:
+        raise Exception(f"读取API key失败: {str(e)}")
 
 
 class AgentType(Enum):
@@ -78,7 +98,9 @@ class AgentBase(ABC):
     
     def __init__(self, config: AgentConfig, name: str, role: str):
         self.config = config
-        self.model = DeepSeek(id="deepseek-chat", api_key = "sk-f25b9b7c1f854a1898098ed0f6126471")
+        # 从文件中读取API key
+        api_key = read_api_key()
+        self.model = DeepSeek(id="deepseek-chat", api_key=api_key)
         self.name = config.name
         self.agent_type = config.agent_type
         self.logger = self._setup_logger()
@@ -163,11 +185,20 @@ class AgentBase(ABC):
     async def _execute_agent(self, input_text: str) -> str:
         """执行Agent处理 - 使用Agno框架"""
         try:
-            # 这里应该调用Agno Agent的实际方法
-            # response = await self.agent.run(input_text)
-            # return response
-            
-            # 模拟实现
+            # 优先调用底层Agent以使用模型与工具
+            if hasattr(self.agent, "run"):
+                # Agno的run方法返回RunResponse对象，不是协程，所以不需要await
+                response = self.agent.run(input_text)
+                # 从RunResponse对象中提取内容
+                if hasattr(response, 'content'):
+                    return str(response.content)
+                elif hasattr(response, 'text'):
+                    return str(response.text)
+                elif hasattr(response, 'response'):
+                    return str(response.response)
+                else:
+                    return str(response)
+            # 兜底：如无可用的Agent实现，返回简要结果
             return f"[{self.name}] 处理结果: {input_text}"
         except Exception as e:
             raise Exception(f"Agent执行失败: {str(e)}")
@@ -194,7 +225,7 @@ class AgentBase(ABC):
             "type": self.agent_type.value,
             "tools_count": len(self.tools),
             "memory_size": self.config.memory_size,
-            "model": self.config.model
+            "model": getattr(self.model, "id", str(self.model))
         }
         
     @abstractmethod

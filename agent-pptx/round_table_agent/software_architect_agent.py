@@ -4,6 +4,7 @@ from agno.tools.reasoning import ReasoningTools
 from agno.tools.googlesearch import GoogleSearchTools
 import asyncio
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -40,15 +41,12 @@ class SoftwareArchitectAgent(AgentBase):
             3. 性能优化和可扩展性设计
             4. 技术风险评估和解决方案
 
-            架构设计任务: {input}
-            技术上下文: {context}
-
-            请提供专业的软件架构设计方案：
+            要求：基于用户给定的任务与可选上下文，输出可执行的架构设计与技术方案，包括：总体架构、关键组件、数据流、技术选型、扩展性与可靠性设计、风险与权衡、里程碑与落地建议。
         """
         return PromptTemplate(template)
     
     async def _preprocess_input(self, input_text: str, context: Optional[Dict] = None) -> str:
-        """预处理 - 识别架构设计需求类型"""
+        """预处理 - 识别架构设计需求类型，并合并上下文信息"""
         architecture_keywords = {
             "架构": "架构设计",
             "系统": "系统设计",
@@ -58,80 +56,37 @@ class SoftwareArchitectAgent(AgentBase):
             "扩展": "可扩展性"
         }
         
+        label_detected = "软件架构模式"
         for keyword, label in architecture_keywords.items():
             if keyword in input_text:
-                return f"[{label}模式] {input_text}"
-        
-        return f"[软件架构模式] {input_text}"
+                label_detected = f"{label}模式"
+                break
+
+        context_text = ""
+        if context is not None:
+            try:
+                if isinstance(context, (dict, list)):
+                    context_text = "\n技术上下文:" + json.dumps(context, ensure_ascii=False)
+                else:
+                    context_text = f"\n技术上下文:{context}"
+            except Exception:
+                context_text = f"\n技术上下文:{str(context)}"
+
+        return f"[{label_detected}] 架构设计任务:{input_text}{context_text}"
     
     async def _postprocess_output(self, output: str) -> str:
         """后处理 - 格式化架构设计方案结果"""
         formatted_output = f"""
             === 软件架构设计方案 ===
             {output}
-
-            === 方案完成时间 ===
-            {asyncio.get_event_loop().time()}
         """
         return formatted_output.strip()
 
     async def think(self, topic: str) -> str:
         await self._simulate_thinking_time()
-        logger.info(f"工程师Agent正在分析话题: {topic}")
+        logger.info(f"软件架构师Agent正在分析话题: {topic}")
         
-        result = f"""# 工程师的观点
-
-            ## 对"{topic}"的技术实现分析
-
-            ### 系统架构设计
-
-            从**技术实现**的角度，我认为需要考虑以下架构要素：
-
-            ```
-            ┌─────────────────────────────────────┐
-            │            前端展示层                │
-            ├─────────────────────────────────────┤
-            │            业务逻辑层                │
-            ├─────────────────────────────────────┤
-            │            数据访问层                │
-            ├─────────────────────────────────────┤
-            │            基础设施层                │
-            └─────────────────────────────────────┘
-            ```
-
-            ### 技术要点分析
-
-            🔧 **核心技术栈**
-            - **后端架构**：微服务架构，支持横向扩展
-            - **数据库设计**：分布式数据库，保证数据一致性
-            - **缓存策略**：多级缓存提升响应速度
-            - **负载均衡**：动态负载分配机制
-
-            ⚡ **性能优化**
-            - **并发处理**：异步处理提升吞吐量
-            - **数据压缩**：减少网络传输开销
-            - **代码优化**：算法优化和代码重构
-            - **监控体系**：实时性能监控和告警
-
-            ### 技术挑战与解决方案
-
-            | 挑战 | 解决方案 |
-            |------|---------|
-            | 高并发处理 | 采用异步编程模型 |
-            | 数据一致性 | 分布式事务管理 |
-            | 系统可用性 | 冗余设计和故障转移 |
-            | 安全防护 | 多层安全防护体系 |
-
-            ### 实施建议
-
-            1. **敏捷开发**：采用迭代开发模式
-            2. **测试驱动**：完善的单元测试和集成测试
-            3. **持续集成**：自动化构建和部署
-            4. **文档管理**：完整的技术文档体系
-
-            ### 技术结论
-
-            从工程角度看，该项目**技术可行性高**，建议采用成熟的技术栈进行实现。
-        """
+        # 使用基类的process方法进行实际推理
+        result = await self.process(topic)
         
         return result.strip()
